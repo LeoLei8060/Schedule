@@ -3,21 +3,28 @@ import { format } from 'date-fns'
 import Calendar from './components/Calendar'
 import PlanList from './components/PlanList'
 import MonthNavigation from './components/MonthNavigation'
+import UserMenu from './components/auth/UserMenu'
+import AuthModal from './components/auth/AuthModal'
 import { api } from './lib/api'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
 
-function App() {
+function AppContent() {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [plans, setPlans] = useState([])
   const [monthPlans, setMonthPlans] = useState([])
   const [loading, setLoading] = useState(true)
+  const [showAuthModal, setShowAuthModal] = useState(false)
+  const [authMode, setAuthMode] = useState('login')
+  const { user, isAuthenticated } = useAuth()
 
-  // 获取计划数据
+  // 获取计划数据（支持用户隔离）
   const fetchPlans = async (date) => {
     try {
       setLoading(true)
       const dateStr = format(date, 'yyyy-MM-dd')
-      const data = await api.getPlans(dateStr)
+      // 传递用户ID以支持数据隔离
+      const data = await api.getPlans(dateStr, user?.id)
       setPlans(data)
     } catch (error) {
       console.error('获取计划失败:', error)
@@ -38,7 +45,8 @@ function App() {
       for (let day = 1; day <= 31; day++) {
         const dateStr = `${year}-${month}-${String(day).padStart(2, '0')}`
         try {
-          const dayPlans = await api.getPlans(dateStr)
+          // 传递用户ID以支持数据隔离
+          const dayPlans = await api.getPlans(dateStr, user?.id)
           monthPlans.push(...dayPlans)
         } catch (error) {
           // 忽略无效日期的错误
@@ -57,11 +65,12 @@ function App() {
     setMonthPlans(data)
   }
 
-  // 添加新计划
+  // 添加新计划（支持用户隔离）
   const handleAddPlan = async (content) => {
     try {
       const dateStr = format(selectedDate, 'yyyy-MM-dd')
-      const newPlan = await api.addPlan(content, dateStr)
+      // 传递用户ID以支持数据隔离
+      const newPlan = await api.addPlan(content, dateStr, user?.id)
       setPlans([...plans, newPlan])
       await refreshMonthPlans()
     } catch (error) {
@@ -70,10 +79,11 @@ function App() {
     }
   }
 
-  // 更新计划
+  // 更新计划（支持用户隔离）
   const handleUpdatePlan = async (id, updates) => {
     try {
-      const updatedPlan = await api.updatePlan(id, updates)
+      // 传递用户ID以支持数据隔离
+      const updatedPlan = await api.updatePlan(id, updates, user?.id)
       setPlans(plans.map(plan => 
         plan.id === id ? { ...plan, ...updatedPlan } : plan
       ))
@@ -84,10 +94,11 @@ function App() {
     }
   }
 
-  // 删除计划（确认在 PlanList 中处理）
+  // 删除计划（支持用户隔离）
   const handleDeletePlan = async (id) => {
     try {
-      await api.deletePlan(id)
+      // 传递用户ID以支持数据隔离
+      await api.deletePlan(id, user?.id)
       setPlans(plans.filter(plan => plan.id !== id))
       await refreshMonthPlans()
     } catch (error) {
@@ -114,10 +125,27 @@ function App() {
     }
   }
 
+  // 处理用户登录
+  const handleLogin = () => {
+    setAuthMode('login')
+    setShowAuthModal(true)
+  }
+
+  // 处理用户注册
+  const handleRegister = () => {
+    setAuthMode('register')
+    setShowAuthModal(true)
+  }
+
+  // 关闭认证弹窗
+  const handleCloseAuthModal = () => {
+    setShowAuthModal(false)
+  }
+
   // 初始化
   useEffect(() => {
     fetchPlans(selectedDate)
-  }, [selectedDate])
+  }, [selectedDate, user]) // 用户变化时重新获取计划
 
   // 获取当前月份的整月计划并传递给日历
   useEffect(() => {
@@ -125,20 +153,54 @@ function App() {
       const data = await fetchMonthPlans(currentDate)
       setMonthPlans(data)
     })()
-  }, [currentDate])
+  }, [currentDate, user]) // 用户变化时重新获取月计划
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* 页面标题 */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            个人月计划管理
-          </h1>
-          <p className="text-gray-600">
-            高效管理您的每月计划，让生活更有条理
-          </p>
+        {/* 页面标题和用户菜单 */}
+        <div className="flex justify-between items-center mb-8">
+          <div className="text-center flex-1">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              个人月计划管理
+            </h1>
+            <p className="text-gray-600">
+              高效管理您的每月计划，让生活更有条理
+            </p>
+          </div>
+          <UserMenu 
+            onLogin={handleLogin}
+            onRegister={handleRegister}
+          />
         </div>
+
+        {/* 认证提示 */}
+        {!isAuthenticated && (
+          <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <div className="flex items-center">
+              <div className="flex-1">
+                <h4 className="text-sm font-medium text-yellow-800 mb-1">当前为匿名模式</h4>
+                <p className="text-sm text-yellow-700">
+                  您的数据仅保存在当前浏览器中。登录后可同步数据到云端，跨设备访问。
+                </p>
+              </div>
+              <div className="ml-4 flex space-x-2">
+                <button
+                  onClick={handleLogin}
+                  className="px-4 py-2 bg-yellow-600 text-white text-sm font-medium rounded-md hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2"
+                >
+                  登录
+                </button>
+                <button
+                  onClick={handleRegister}
+                  className="px-4 py-2 bg-white text-yellow-600 text-sm font-medium rounded-md border border-yellow-300 hover:bg-yellow-50 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2"
+                >
+                  注册
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* 月份导航 */}
         <MonthNavigation 
@@ -189,10 +251,31 @@ function App() {
             <li>• 在右侧计划列表中添加、编辑、删除计划</li>
             <li>• 使用复选框标记计划完成状态</li>
             <li>• 点击月份导航切换不同月份</li>
+            {isAuthenticated && (
+              <li>• 您的数据已安全保存在云端，可在任何设备访问</li>
+            )}
+            {!isAuthenticated && (
+              <li>• 登录后可同步数据到云端，跨设备访问</li>
+            )}
           </ul>
         </div>
       </div>
+
+      {/* 认证弹窗 */}
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={handleCloseAuthModal}
+        defaultMode={authMode}
+      />
     </div>
+  )
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   )
 }
 

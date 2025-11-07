@@ -1,98 +1,36 @@
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { v4 as uuidv4 } from 'uuid'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-const dataDir = path.join(__dirname, '..', 'data')
-const dbPath = path.join(dataDir, 'db.json')
-
 let db = null
+const dataDir = path.join(__dirname, '..', 'data')
+const dbFile = path.join(dataDir, 'db.json')
 
-function defaultDB() {
-  return {
-    users: [],
-    profiles: [],
-    plans: [], // authenticated user plans
-    public_plans: [] // anonymous session plans
-  }
+function save() {
+  if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true })
+  fs.writeFileSync(dbFile, JSON.stringify(db, null, 2), 'utf-8')
 }
 
 export function initDB() {
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true })
-  }
-  if (!fs.existsSync(dbPath)) {
-    db = defaultDB()
-    fs.writeFileSync(dbPath, JSON.stringify(db, null, 2), 'utf-8')
+  if (db) return db
+  if (!fs.existsSync(dbFile)) {
+    db = { users: [], profiles: [], plans: [], public_plans: [] }
+    save()
   } else {
-    try {
-      const raw = fs.readFileSync(dbPath, 'utf-8')
-      db = JSON.parse(raw)
-      // 修正缺失的字段
-      db.users ||= []
-      db.profiles ||= []
-      db.plans ||= []
-      db.public_plans ||= []
-    } catch (e) {
-      // 文件损坏则重置
-      db = defaultDB()
-      fs.writeFileSync(dbPath, JSON.stringify(db, null, 2), 'utf-8')
-    }
+    db = JSON.parse(fs.readFileSync(dbFile, 'utf-8'))
+    db.plans = db.plans || []
+    db.public_plans = db.public_plans || []
   }
-}
-
-function save() {
-  if (!db) initDB()
-  fs.writeFileSync(dbPath, JSON.stringify(db, null, 2), 'utf-8')
+  return db
 }
 
 export function newId() {
-  return uuidv4()
+  return Math.random().toString(36).slice(2) + Date.now().toString(36)
 }
 
-// 用户/资料
-export function findUserByEmail(email) {
-  if (!db) initDB()
-  return db.users.find(u => u.email === email) || null
-}
-
-export function getUserById(id) {
-  if (!db) initDB()
-  return db.users.find(u => u.id === id) || null
-}
-
-export function getUserWithProfileByEmail(email) {
-  const u = findUserByEmail(email)
-  if (!u) return null
-  const p = db.profiles.find(p => p.id === u.id) || {}
-  return { id: u.id, email: u.email, full_name: p.full_name || null, avatar_url: p.avatar_url || null }
-}
-
-export function getUserWithProfileById(id) {
-  const u = getUserById(id)
-  if (!u) return null
-  const p = db.profiles.find(p => p.id === id) || {}
-  return { id: u.id, email: u.email, full_name: p.full_name || null, avatar_url: p.avatar_url || null }
-}
-
-export function createUser(user) {
-  if (!db) initDB()
-  db.users.push(user)
-  save()
-}
-
-export function createProfile(profile) {
-  if (!db) initDB()
-  const exist = db.profiles.find(p => p.id === profile.id)
-  if (!exist) db.profiles.push(profile)
-  else Object.assign(exist, profile)
-  save()
-}
-
-// 计划（用户/匿名）
 export function getPlansByDateAndUser(date, userId) {
   if (!db) initDB()
   return db.plans
@@ -109,17 +47,39 @@ export function getPublicPlansByDateAndSession(date, sessionId) {
     .map(p => ({ ...p, completed: !!p.completed }))
 }
 
-export function insertUserPlan({ id, content, date, userId, now }) {
+export function insertUserPlan({ id, content, exercise_type, unit, quantity = 0, date, userId, now }) {
   if (!db) initDB()
-  const rec = { id, content, plan_date: date, completed: 0, user_id: userId, created_at: now, updated_at: now }
+  const rec = {
+    id,
+    content: content ?? (exercise_type ?? ''),
+    exercise_type: exercise_type ?? null,
+    unit: unit ?? null,
+    quantity: Number(quantity) || 0,
+    plan_date: date,
+    completed: 0,
+    user_id: userId,
+    created_at: now,
+    updated_at: now
+  }
   db.plans.push(rec)
   save()
   return { ...rec, completed: !!rec.completed }
 }
 
-export function insertPublicPlan({ id, content, date, sessionId, now }) {
+export function insertPublicPlan({ id, content, exercise_type, unit, quantity = 0, date, sessionId, now }) {
   if (!db) initDB()
-  const rec = { id, content, plan_date: date, completed: 0, session_id: sessionId || null, created_at: now, updated_at: now }
+  const rec = {
+    id,
+    content: content ?? (exercise_type ?? ''),
+    exercise_type: exercise_type ?? null,
+    unit: unit ?? null,
+    quantity: Number(quantity) || 0,
+    plan_date: date,
+    completed: 0,
+    session_id: sessionId || null,
+    created_at: now,
+    updated_at: now
+  }
   db.public_plans.push(rec)
   save()
   return { ...rec, completed: !!rec.completed }
@@ -130,6 +90,9 @@ export function updateUserPlan(id, userId, updates) {
   const rec = db.plans.find(p => p.id === id && p.user_id === userId)
   if (!rec) return null
   rec.content = updates.content ?? rec.content
+  if (updates.exercise_type !== undefined) rec.exercise_type = updates.exercise_type
+  if (updates.unit !== undefined) rec.unit = updates.unit
+  if (updates.quantity !== undefined) rec.quantity = Number(updates.quantity) || 0
   if (updates.completed != null) rec.completed = updates.completed ? 1 : 0
   rec.updated_at = new Date().toISOString()
   save()
@@ -141,10 +104,51 @@ export function updatePublicPlan(id, sessionId, updates) {
   const rec = db.public_plans.find(p => p.id === id && p.session_id === sessionId)
   if (!rec) return null
   rec.content = updates.content ?? rec.content
+  if (updates.exercise_type !== undefined) rec.exercise_type = updates.exercise_type
+  if (updates.unit !== undefined) rec.unit = updates.unit
+  if (updates.quantity !== undefined) rec.quantity = Number(updates.quantity) || 0
   if (updates.completed != null) rec.completed = updates.completed ? 1 : 0
   rec.updated_at = new Date().toISOString()
   save()
   return { ...rec, completed: !!rec.completed }
+}
+
+export function findUserByEmail(email) {
+  if (!db) initDB()
+  return db.users.find(u => u.email === email) || null
+}
+
+export function getUserById(id) {
+  if (!db) initDB()
+  return db.users.find(u => u.id === id) || null
+}
+
+export function getUserWithProfileByEmail(email) {
+  const u = findUserByEmail(email)
+  if (!u) return null
+  const p = (db && db.profiles ? db.profiles.find(p => p.id === u.id) : null) || {}
+  return { id: u.id, email: u.email, full_name: p.full_name || null, avatar_url: p.avatar_url || null }
+}
+
+export function getUserWithProfileById(id) {
+  const u = getUserById(id)
+  if (!u) return null
+  const p = (db && db.profiles ? db.profiles.find(p => p.id === id) : null) || {}
+  return { id: u.id, email: u.email, full_name: p.full_name || null, avatar_url: p.avatar_url || null }
+}
+
+export function createUser(user) {
+  if (!db) initDB()
+  db.users.push(user)
+  save()
+}
+
+export function createProfile(profile) {
+  if (!db) initDB()
+  const exist = db.profiles.find(p => p.id === profile.id)
+  if (!exist) db.profiles.push(profile)
+  else Object.assign(exist, profile)
+  save()
 }
 
 export function deleteUserPlan(id, userId) {

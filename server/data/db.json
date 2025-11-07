@@ -47,6 +47,24 @@
       "user_id": "5e7b4061-f14e-4b84-8241-08dae08c5121",
       "created_at": "2025-11-06T07:05:57.533Z",
       "updated_at": "2025-11-06T07:06:00.383Z"
+    },
+    {
+      "id": "1f2cdc6a-2028-4b48-8056-d10ad78ae0dc",
+      "content": "1",
+      "plan_date": "2025-11-06",
+      "completed": 0,
+      "user_id": "5e7b4061-f14e-4b84-8241-08dae08c5121",
+      "created_at": "2025-11-07T07:33:41.683Z",
+      "updated_at": "2025-11-07T07:33:41.683Z"
+    },
+    {
+      "id": "a1618b16-a9c2-4c94-a56a-9fe2b795e264",
+      "content": "1",
+      "plan_date": "2025-11-06",
+      "completed": 0,
+      "user_id": "5e7b4061-f14e-4b84-8241-08dae08c5121",
+      "created_at": "2025-11-07T07:33:50.321Z",
+      "updated_at": "2025-11-07T07:33:50.321Z"
     }
   ],
   "public_plans": []

@@ -30,22 +30,22 @@ router.get('/', (req, res) => {
   return res.json(rows)
 })
 
-// 添加计划
+// 添加计划（改为支持 exercise_type/unit/quantity）
 router.post('/', (req, res) => {
-  const { content, date, userId, sessionId } = req.body
-  if (!content || !date) return res.status(400).json({ error: '缺少 content 或 date' })
+  const { content, exercise_type, unit, quantity = 0, date, userId, sessionId } = req.body
+  if ((!content && !exercise_type) || !date) return res.status(400).json({ error: '缺少 content/exercise_type 或 date' })
 
   const now = new Date().toISOString()
   const id = newId()
   if (userId) {
-    const r = insertUserPlan({ id, content, date, userId, now })
+    const r = insertUserPlan({ id, content, exercise_type, unit, quantity, date, userId, now })
     return res.json(r)
   }
-  const r = insertPublicPlan({ id, content, date, sessionId: sessionId || null, now })
+  const r = insertPublicPlan({ id, content, exercise_type, unit, quantity, date, sessionId: sessionId || null, now })
   return res.json(r)
 })
 
-// 更新计划
+// 更新计划（支持 exercise_type/unit/quantity/completed）
 router.put('/:id', (req, res) => {
   const { id } = req.params
   const { updates, userId, sessionId } = req.body

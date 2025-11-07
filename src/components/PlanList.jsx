@@ -1,40 +1,73 @@
 import React, { useState } from 'react'
 import { Trash2, Edit3, Check, X } from 'lucide-react'
 
+// 运动类型与单位映射
+const EXERCISE_UNIT_MAP = {
+  '跑步机': '时间',
+  '户外行走': '公里数',
+  '室内骑行': '公里数',
+  '户外骑行': '公里数',
+  '爬楼梯': '楼层数',
+  '深蹲': '个数',
+  '哑铃弯举': '个数',
+  '哑铃高举': '个数',
+  '哑铃侧平举': '个数',
+  '跳绳': '个数',
+  '平板支撑': '时间',
+  '开合跳': '个数',
+  '波比跳': '个数',
+  '壶铃摆荡': '个数',
+  '跪姿俯卧撑': '个数',
+  '俯卧撑': '个数',
+  '靠墙静蹲': '时间'
+}
+
+const EXERCISE_TYPES = Object.keys(EXERCISE_UNIT_MAP)
+
 const PlanList = ({ plans, onAddPlan, onUpdatePlan, onDeletePlan }) => {
-  const [newPlanContent, setNewPlanContent] = useState('')
+  const [newType, setNewType] = useState(EXERCISE_TYPES[0])
+  const [newQuantity, setNewQuantity] = useState('')
   const [editingId, setEditingId] = useState(null)
-  const [editingContent, setEditingContent] = useState('')
+  const [editingType, setEditingType] = useState('')
+  const [editingQuantity, setEditingQuantity] = useState('')
   const [confirmDeleteId, setConfirmDeleteId] = useState(null)
+
+  const getUnitByType = (type) => EXERCISE_UNIT_MAP[type] || ''
 
   // 添加新计划
   const handleAddPlan = async (e) => {
     e.preventDefault()
-    if (newPlanContent.trim()) {
-      await onAddPlan(newPlanContent.trim())
-      setNewPlanContent('')
-    }
+    if (!newType) return
+    const quantityNum = Number(newQuantity)
+    if (Number.isNaN(quantityNum) || quantityNum <= 0) return
+    const unit = getUnitByType(newType)
+    await onAddPlan(newType, unit, quantityNum)
+    setNewQuantity('')
   }
 
   // 开始编辑
   const startEditing = (plan) => {
     setEditingId(plan.id)
-    setEditingContent(plan.content)
+    setEditingType(plan.exercise_type || EXERCISE_TYPES[0])
+    setEditingQuantity(String(plan.quantity ?? ''))
   }
 
   // 保存编辑
   const saveEdit = async () => {
-    if (editingContent.trim()) {
-      await onUpdatePlan(editingId, { content: editingContent.trim() })
-      setEditingId(null)
-      setEditingContent('')
-    }
+    const qty = Number(editingQuantity)
+    if (Number.isNaN(qty) || qty <= 0) return
+    const unit = getUnitByType(editingType)
+    await onUpdatePlan(editingId, { exerciseType: editingType, unit, quantity: qty })
+    setEditingId(null)
+    setEditingType('')
+    setEditingQuantity('')
   }
 
   // 取消编辑
   const cancelEdit = () => {
     setEditingId(null)
-    setEditingContent('')
+    setEditingType('')
+    setEditingQuantity('')
   }
 
   // 切换完成状态
@@ -68,16 +101,30 @@ const PlanList = ({ plans, onAddPlan, onUpdatePlan, onDeletePlan }) => {
         </span>
       </div>
 
-      {/* 添加新计划表单 */}
+      {/* 添加新计划表单：类型 + 数量（单位随类型变化） */}
       <form onSubmit={handleAddPlan} className="mb-6">
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          <select
+            value={newType}
+            onChange={(e) => setNewType(e.target.value)}
+            className="w-40 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          >
+            {EXERCISE_TYPES.map(t => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+
           <input
-            type="text"
-            value={newPlanContent}
-            onChange={(e) => setNewPlanContent(e.target.value)}
-            placeholder="添加新计划..."
-            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            type="number"
+            value={newQuantity}
+            onChange={(e) => setNewQuantity(e.target.value)}
+            placeholder="数量"
+            min="1"
+            className="w-28 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           />
+
+          <span className="text-sm text-gray-600">{getUnitByType(newType)}</span>
+
           <button
             type="submit"
             className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors"
@@ -108,17 +155,28 @@ const PlanList = ({ plans, onAddPlan, onUpdatePlan, onDeletePlan }) => {
                 className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500"
               />
 
-              {/* 计划内容 */}
+              {/* 计划内容/结构化显示与编辑 */}
               <div className="flex-1">
                 {editingId === plan.id ? (
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 items-center">
+                    <select
+                      value={editingType}
+                      onChange={(e) => setEditingType(e.target.value)}
+                      className="w-36 px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    >
+                      {EXERCISE_TYPES.map(t => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
                     <input
-                      type="text"
-                      value={editingContent}
-                      onChange={(e) => setEditingContent(e.target.value)}
-                      className="flex-1 px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary-500"
-                      autoFocus
+                      type="number"
+                      value={editingQuantity}
+                      onChange={(e) => setEditingQuantity(e.target.value)}
+                      min="1"
+                      placeholder="数量"
+                      className="w-24 px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary-500"
                     />
+                    <span className="text-xs text-gray-500">{getUnitByType(editingType)}</span>
                     <button
                       onClick={saveEdit}
                       className="p-1 text-green-600 hover:text-green-700"
@@ -133,16 +191,21 @@ const PlanList = ({ plans, onAddPlan, onUpdatePlan, onDeletePlan }) => {
                     </button>
                   </div>
                 ) : (
-                  <span
-                    className={`cursor-pointer ${
-                      plan.completed 
-                        ? 'line-through text-gray-500' 
-                        : 'text-gray-800'
-                    }`}
-                    onClick={() => startEditing(plan)}
-                  >
-                    {plan.content}
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={`cursor-pointer ${
+                        plan.completed 
+                          ? 'line-through text-gray-500' 
+                          : 'text-gray-800'
+                      }`}
+                      onClick={() => startEditing(plan)}
+                    >
+                      {plan.exercise_type ? `${plan.exercise_type}` : `${plan.content}`}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      {(plan.quantity ?? '')} {(plan.unit ?? '')}
+                    </span>
+                  </div>
                 )}
               </div>
 
